@@ -15,23 +15,26 @@ import json
 try:
     from openpyxl import Workbook
     from openpyxl import load_workbook
+
     openpyxl_exist = True
 except ModuleNotFoundError:
     openpyxl_exist = False
     print('\'openpyxl\' Module Not Found. Excel related function cannot to call.')
 
 # 脚本路径
+import inspect
 import sys
-import inspect, sys
 
 _code_path = sys.path[0].replace('\\', '/') + '/'
+
+
 # _code_name = inspect.getsourcefile(sys._getframe(1))
 
 # 用于追加输出logging信息，可以在某环节进行覆盖本行的输出
 def my_logging(file, string, adding=False):
     """
     Support to write the logging info in the form like end='\r'
-    :param file: the open file object
+    :param file: the opened file object
     :param string: string object to write
     :param adding: if True, just like '\a' form; if False, '\r'
     :return: None
@@ -44,43 +47,45 @@ def my_logging(file, string, adding=False):
     file.seek(pos - len(string1), 0)
 
 
-def mkdir(path, file=False, silence=False):
+def mkdir(path_, file=False, silence=False):
     """
     Function to make direct direction.
-    :param path: the direct direction
-    :param file: itegrate to perform my_logging(file, path + '  - Successfully create', adding=True)
+    :param path_: the direct direction
+    :param file: integrate to perform my_logging(file, path + '  - Successfully create', adding=True)
     :param silence: if print or not
     :return: None
     """
-    # 去除首位空格
-    path = path.strip()
-    # 去除尾部 \ 符号
-    path = path.rstrip("/")
-    # 判断路径是否存在
-    isExists = os.path.exists(path)
-    if not isExists:
-        # 如果不存在则创建目录
-        os.makedirs(path)
-        string = path + '  - Successfully create'
-        if file:
-            my_logging(file, string, adding=True)
-        if not silence:
-            print(string)
-
+    if type(path_) == str:
+        paths = [path_]
     else:
-        # 如果目录存在则不创建，并提示目录已存在
-        string = path + '  - Directory already exists'
-        if file:
-            my_logging(file, string, adding=True)
-        if not silence:
-            print(string)
+        paths = path_
+
+    for path_ in paths:
+        path_ = path_.strip(' ')
+        path_ = path_.rstrip("/")
+        isExists = os.path.exists(path_)
+        if not isExists:
+            os.makedirs(path_)
+            string = path_ + '  - Successfully create'
+            if file:
+                my_logging(file, string, adding=True)
+            if not silence:
+                print(string)
+
+        else:
+            string = path_ + '  - Directory already exists'
+            if file:
+                my_logging(file, string, adding=True)
+            if not silence:
+                print(string)
 
 
 # wc
-def wc_py(path, time_print=False):
+def wc_py(path, count_target='\n', time_print=False):
     """
-    To get file line number as linux wc -l
+    To get file line counts as linux wc -l, which is expanded to allow .gz file
     :param path: file path
+    :param count_target: count target
     :param time_print: if print time used
     :return: line number
     """
@@ -88,17 +93,32 @@ def wc_py(path, time_print=False):
         import time
         start = time.time()
 
-    with open(path, 'rb') as f:
-        count = 0
-        last_data = '\n'
-        while True:
-            data = f.read(0x400000)
-            if not data:
-                break
-            count += data.count(b'\n')
-            last_data = data
-        if last_data[-1:] != b'\n':
-            count += 1  # Remove this if a wc-like count is needed
+    if '.gz' not in path:
+        f = open(path, 'rb')
+    else:
+        try:
+            from xopen import xopen
+            f = xopen(path, 'rb')
+        except ModuleNotFoundError:
+            import gzip
+            f = gzip.open(path, 'rb')
+
+    count_target = bytes(count_target, encoding='utf-8')
+    length = len(count_target)
+    count = 0
+    last_data = count_target
+    while True:
+        data = f.read(0x400000)
+        if not data:
+            break
+        count += data.count(count_target)
+        last_data = data
+
+    if last_data[-length:] != b'\n':
+        print(last_data[-length:], count_target)
+        count += 1  # Remove this if a wc-like count is needed
+
+    f.close()
 
     if time_print:
         end = time.time()
@@ -114,8 +134,8 @@ def listdir(path, target='', exception=False, sep=False, logic_and=True):
     :param target: element with such string will be selected (cooperated with param 'sep' and 'logic_and')
     :param exception: element with such string will not be selected (cooperated with param 'sep' and 'logic_and')
     :param sep: param 'target' and 'exception' will be split by sep
-    :param logic_and: splited param 'target' and 'exception' will be used in the logic 'and', 'or'
-    :return: file list after selcted
+    :param logic_and: split param 'target' and 'exception' will be used in the logic 'and', 'or'
+    :return: file list after select
     """
     file_list = os.listdir(path)
     if sep:
@@ -143,6 +163,14 @@ def listdir(path, target='', exception=False, sep=False, logic_and=True):
 
 
 def reform_size(size_, detail=False, remain=3, rounding=2):
+    """
+    reform Bite size
+    :param size_:
+    :param detail:
+    :param remain:
+    :param rounding:
+    :return:
+    """
     if size_ < 0:
         raise ValueError('size can not be a negative number.')
     if size_ < 1024:
@@ -153,7 +181,7 @@ def reform_size(size_, detail=False, remain=3, rounding=2):
     magnitude = int(math.log(size_, 1024))
 
     if not detail:
-        size__ = np.round(size_ / (1024 ** (magnitude)), rounding)
+        size__ = np.round(size_ / (1024 ** magnitude), rounding)
 
         return str(size__) + magnitude_name[magnitude]
 
@@ -174,7 +202,6 @@ def reform_size(size_, detail=False, remain=3, rounding=2):
                 out_string_ += [str(num_) + name_]
 
         return ' '.join(out_string_[: remain])
-
 
 
 def getdirsize(path_, **kwargs):
@@ -243,10 +270,35 @@ def get_all_file(path_, thres=99999, **kwargs):
 
 
 def path_diagnosis(path_):
+    """
+
+    :param path_:
+    :return:
+    """
     if path_[-1] != '/' or path_[-1] != '\\':
         path_ = path_ + '/'
 
     return path_
+
+
+def get_path(path_, *args):
+    return path_ + '/'.join(args) + '/'
+
+
+def get_memory(reform=False, **kwargs):
+    """
+
+    :param reform:
+    :param kwargs:
+    :return:
+    """
+    import psutil
+    mem = psutil.virtual_memory()
+    mem_free = mem.total
+    if reform:
+        return reform_size(mem_free, **kwargs)
+    else:
+        return mem_free
 
 
 # pkl文件写入 读取
@@ -298,6 +350,76 @@ def write_json(path_, json_file_):
         json.dump(json_file_, file_)
 
 
+def read_table_gz(path_, sep='\t', decode='utf-8', header=True, index_col=None):
+    """
+    Read table with .gz file as a df
+    :param path_: gz file path
+    :param sep: id info will split by the given separation and keep the front part
+    :param decode: decode parameter
+    :param header: same as pandas.read_csv()
+    :param index_col: same as pandas.read_csv()
+    :return: df
+    """
+
+    if header is not None:
+        i_ = 0
+    else:
+        i_ = 1
+    result_ = []
+
+    try:
+        from xopen import xopen
+
+        with xopen(path_, 'r') as file_:
+            for line_ in file_:
+                line_ = line_.strip("\n\r").split(sep)
+                if not i_:
+                    columns_ = line_
+                    i_ = 1
+                    continue
+                if ('\x00' in line_) and i > 0:
+                    continue
+
+                result_ += [line_]
+
+            result_ = pd.DataFrame(result_)
+            if header is not None:
+                result_.columns = columns_
+
+            if index_col is not None:
+                try:
+                    result_ = result_.set_index(index_col)
+                except KeyError:
+                    result_ = result_.set_index([result_.columns[i_] for i_ in index_col])
+
+    except ModuleNotFoundError:
+        import gzip
+
+        with gzip.open(path_, 'r') as file_:
+            for line_ in file_:
+                line_ = line_.decode(decode).strip("\r").split(sep)
+                if not i_:
+                    columns_ = line_
+                    i_ = 1
+                    continue
+                if ('\x00' in line_) and i > 0:
+                    continue
+
+                result_ += [line_]
+
+            result_ = pd.DataFrame(result_)
+            if header is not None:
+                result_.columns = columns_
+
+            if index_col is not None:
+                try:
+                    result_ = result_.set_index(index_col)
+                except KeyError:
+                    result_ = result_.set_index([result_.columns[i_] for i_ in index_col])
+
+    return result_
+
+
 # excel 相关函数
 if openpyxl_exist:
     def _read_sheet(sheets_, sheet_identify):
@@ -323,8 +445,8 @@ if openpyxl_exist:
 
     def read_xlsx(path_, sheet_identify=0, dict_out=False):
         """
-        Read excel file in a freedom framework
-        :param path_: excel file path
+        Read Excel file in a freedom framework
+        :param path_: Excel file path
         :param sheet_identify: int, str, list, or None, determine sheet(s) to be read
         :param dict_out: if out dict or list of dfs
         :return: df or list or dict of dfs in values
@@ -346,28 +468,28 @@ if openpyxl_exist:
 
 
     def _input_sheet(ws_, df_):
-        index_value = df_.index.names
-        info = list(index_value) + list(df_.columns)
+        index_value = df_.index.names[0]
+        index_value = str(index_value) if index_value is not None else ''
+        info = [index_value] + [str(value_) for value_ in df_.columns]
         ws_.append(info)
 
         for i_ in range(df_.shape[0]):
-            index_value = df_.index[i_]
-            is_iter = isinstance(index_value, Iterable)
-            if not is_iter:
-                index_value = [index_value]
-            info = list(index_value) + list(df_.iloc[i_])
+            index_value = str(df_.index[i_])
+            info = [index_value] + [str(value_) for value_ in df_.iloc[i_]]
             ws_.append(info)
 
         return ws_
 
 
-    def save_xlsx(save_path_, df_list_, titles=None):
+    def save_xlsx(path_, df_list_, titles=None, mark_code_path=True, replace=False):
         """
-        Save df, list of dfs, or dict of dfs to excel file
-        :param save_path_: excel file path
+        Save df, list of dfs, or dict of dfs to Excel file
+        :param path_: Excel file path
         :param df_list_: df, list of dfs, or dict of dfs
         :param titles: giving the sheet names of each dfs if df_list_'s type is list
-        :return:
+        :param mark_code_path:
+        :param replace:
+        :return: None
         """
         is_df = type(df_list_) == pd.core.frame.DataFrame
         if is_df:
@@ -386,7 +508,10 @@ if openpyxl_exist:
             ws_ = wb_.create_sheet(zip_info[0], i_)
             ws_ = _input_sheet(ws_, zip_info[1])
 
-        wb_.save(save_path_)
+        wb_.save(path_)
+
+        if mark_code_path:
+            _mark_code_path(path_.rsplit('/', 1)[0] + '/', path_.rsplit('/', 1)[-1], replace=replace)
 
 
 # universal read framework
@@ -395,23 +520,33 @@ def read_file(path_, sep=False, extension=None, sheet_identify=0, split=None, nu
     A universal read framework
     :param path_: file path
     :param sep: delimiter to use
-    :param sheet_identify: str, int, list, or None
+    :param extension: specific read file extension
+    :param sheet_identify: str, int, list, or None (specify to get all sheets)
     :param split: fot fa and fq files, id info will split by the given separation and keep the front part
     :param num_limit: fot fa and fq files, stop reading at which line
     :param decode: fot fa and fq files, decode parameter
     :param kwargs: keyword argument for table like file
     :return: file
     """
+    if '/' not in path_ and '\\' not in path_:
+        path_ = './' + path_
+
     file_name = path_.rsplit('/', 1)[-1]
     if extension is not None:
         houzhui_ = extension
+        file_name += '.' + extension  # fa fq can add to extension
     else:
         houzhui_ = file_name.rsplit('.', 1)[-1]
 
-    if houzhui_ in ['txt', 'tsv', 'bed', 'tlx']:
+    if houzhui_ in ['txt', 'tsv', 'tlx']:
         if not sep:
             sep = '\t'
         return pd.read_csv(path_, sep=sep, **kwargs)
+
+    elif houzhui_ in ['bed']:
+        if not sep:
+            sep = '\t'
+        return pd.read_csv(path_, sep=sep, header=None, **kwargs)
 
     elif houzhui_ in ['csv']:
         if not sep:
@@ -422,12 +557,16 @@ def read_file(path_, sep=False, extension=None, sheet_identify=0, split=None, nu
         return pd.read_excel(path_, sheet_name=sheet_identify, **kwargs)
 
     elif houzhui_ in ['pkl']:
-       return read_pickle(path_)
+        return read_pickle(path_)
 
-    elif houzhui_ in ['fa', 'fasta']:
-        from .bio_tools import read_fasta
-        return read_fasta(path_, split)
+    elif houzhui_ in ['pdb']:
+        from .bio_tools import read_pdb_file
+        return read_pdb_file(path_, **kwargs)
 
+    elif houzhui_ in ['json']:
+        return read_json(path_)
+
+    # 注意读取的判断顺序
     elif '.fastq' in file_name or '.fq' in file_name:
         from .bio_tools import read_fastq, read_fastq_gz
         if houzhui_ in ['gz']:
@@ -435,12 +574,29 @@ def read_file(path_, sep=False, extension=None, sheet_identify=0, split=None, nu
         else:
             return read_fastq(path_, split)
 
-    elif houzhui_ in ['pdb']:
-        from .bio_tools import read_pdb_file
-        return read_pdb_file(path_)
+    elif '.fasta' in file_name or '.fa' in file_name:
+        from .bio_tools import read_fasta, read_fasta_gz
+        if houzhui_ in ['gz']:
+            return read_fasta_gz(path_, split, num_limit, decode)
+        else:
+            return read_fasta(path_, split)
 
-    elif houzhui_ in ['json']:
-        return read_json(path_)
+    elif houzhui_ in ['gz']:
+        name_split = file_name.rsplit('.', 2)
+        if len(name_split) < 3:
+            raise ValueError('File type only .' + houzhui_ + ' has not been added to this function yet. ')
+
+        houzhui_2 = name_split[-2]
+        if houzhui_2 in ['txt', 'tsv', 'bed', 'tlx']:
+            if not sep:
+                sep = '\t'
+        elif houzhui_2 in ['csv']:
+            if not sep:
+                sep = ','
+        else:
+            raise ValueError('File type .' + houzhui_2 + '.gz has not been added to this function yet. ')
+
+        return read_table_gz(path_, sep=sep, decode=decode, **kwargs)
 
     else:
         raise ValueError('File type .' + houzhui_ + ' has not been added to this function yet. ')
@@ -476,12 +632,14 @@ def _mark_code_path(path_, name_, replace=False):
 
 
 # universal write framework
-def write_file(path_, data_, sep=False, extension=None, sheet_identify='sheet1', mark_code_path=True, replace=False, **kwargs):
+def write_file(path_, data_, sep=False, extension=None, sheet_identify='sheet1',
+               mark_code_path=True, replace=False, **kwargs):
     """
     A universal write framework
     :param path_: file path
     :param data_: data to save
     :param sep: delimiter to use
+    :param extension: specific save file extension
     :param sheet_identify: str, int, list, or None
     :param mark_code_path: mark where the code is within a config-like file
     :param replace: if replace the same result path in the config-like file
@@ -508,7 +666,7 @@ def write_file(path_, data_, sep=False, extension=None, sheet_identify='sheet1',
         data_.to_excel(path_, sheet_name=sheet_identify, **kwargs)
 
     elif houzhui_ in ['pkl']:
-       write_pickle(path_, data_)
+        write_pickle(path_, data_)
 
     elif houzhui_ in ['fa', 'fasta']:
         from .bio_tools import write_fasta

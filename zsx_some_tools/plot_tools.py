@@ -2,13 +2,23 @@
 # @Author: Zhang Senxin
 
 """
-Functions mainly for ploting
+Functions mainly for plotting
 contain simple test
 """
 
 import numpy as np
 from collections import namedtuple
 from .basic_tools import mark_pval, simple_test
+import math
+
+
+class DecentColor(object):
+    def __init__(self):
+        self.c_orange = np.array([255, 180, 160, 255]) / 255
+        self.c_purple = np.array([181, 170, 210, 255]) / 255
+        self.c_green = np.array([163, 218, 202, 255]) / 255
+        self.c_blue = np.array([70, 169, 224, 255]) / 255
+        self.c_red = np.array([239, 92, 85, 255]) / 255
 
 
 # 设置字体
@@ -92,17 +102,17 @@ def mark_significance(plt_, data1_, data2_, x1_, x2_, height='max', rounding=4, 
     :param data2_: sample2
     :param x1_: x coordinate for sample1
     :param x2_: x coordinate for sample2
-    :param height: y coordinate to mark line, defalt is 'max', use the max(sample1) as height,
+    :param height: y coordinate to mark line, default is 'max', use the max(sample1) as height,
     while 'mean' and int or float obj are also supported.
     :param rounding: numpy.round(obj, rounding) will be performed for P-value
-    :param y_axis_ran: determin the max range of y coordinate, which is related to the block info.
-    defalt is Fasle, will call the max range of y coordinate now.
+    :param y_axis_ran: determine the max range of y coordinate, which is related to the block info.
+    default is False, will call the max range of y coordinate now.
     :param color_font: text color
     :param block_ratio: the block ratio between the mark and data present
     :param block_ratio_p: the block ratio between the mark and p-value text
     :param one_tail: do one-tail or two-tail test
-    :param norm_fix: If the test fixs normal distribution or not.
-    Default is None, than will perform normal distribution test to determin it.
+    :param norm_fix: If the test fixes normal distribution or not.
+    Default is None, then will perform normal distribution test to determine it.
     If True, normal distribution is directly determined, vice versa.
     :param vertical_ratio: to change the height of vertical length of mark
     :param alpha_p: Significant level
@@ -179,7 +189,7 @@ def rgb_2_hex(rgb_):
     :param rgb_: rgb color
     :return: str, hex color
     """
-    return "#"+"".join([i[2:] if len(i[2:])>1 else '0'+i[2:] for i in [hex(rgb_[0]), hex(rgb_[1]), hex(rgb_[2])]])
+    return "#" + "".join([i[2:] if len(i[2:]) > 1 else '0' + i[2:] for i in [hex(rgb_[0]), hex(rgb_[1]), hex(rgb_[2])]])
 
 
 def rgba_2_rgb(rgba_, background_color_=None):
@@ -203,7 +213,7 @@ def rgba_2_rgb(rgba_, background_color_=None):
 
 def set_base_color(plt_, base_color_):
     """
-    Set the axis color. Note that line.set_color did not refect, so just set disvisible for the scale line.
+    Set the axis color. Note that line.set_color did not reflect, so just set invisible for the scale line.
     :param plt_: plot canvas or subplot canvas obj
     :param base_color_: axis color
     :return: plot canvas or subplot canvas obj
@@ -214,7 +224,7 @@ def set_base_color(plt_, base_color_):
     ax1_.spines['bottom'].set_color(base_color_)
     ax1_.spines['left'].set_color(base_color_)
 
-    # line.set_color did not refect, so just neglact
+    # line.set_color did not reflect, so just neglect
     for line in ax1_.yaxis.get_ticklines():
         line.set_visible(False)
     for line in ax1_.xaxis.get_ticklines():
@@ -233,7 +243,131 @@ def set_spines(plt_, lw=2):
     ax1_ = plt_.gca()
     ax1_.spines['top'].set_visible(False)
     ax1_.spines['right'].set_visible(False)
-    ax1_.spines['bottom'].set_linewidth(lw) # 设置底部坐标轴的粗细
-    ax1_.spines['left'].set_linewidth(lw)   # 设置左边坐标轴的粗细
+    ax1_.spines['bottom'].set_linewidth(lw)  # 设置底部坐标轴的粗细
+    ax1_.spines['left'].set_linewidth(lw)  # 设置左边坐标轴的粗细
 
     return ax1_
+
+
+def mod_fun(array_):
+    """
+    get mod of an array
+    :param array_:
+    :return:
+    """
+    return np.dot(array_, array_) ** 0.5
+
+
+def circle_curve_plot(ax, x1, x2, y1=0, y2=0, up_down='up', alpha=180, epsilon=1000, **kwargs):
+    """
+    need math
+    """
+    up_down = 1 if up_down in 'up' else -1
+
+    alpha0 = alpha / 180 * math.pi
+    l = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
+    h = (l / 2) * (1 / math.tan(alpha0 / 2))
+
+    beta = math.atan((y2 - y1) / (x2 - x1)) if x2 != x1 else math.pi / 2
+
+    gamma = abs(math.pi / 2 - beta)
+
+    if beta == 0:
+        dieta_x = 0
+    elif beta <= math.pi / 2:
+        dieta_x = h * math.cos(gamma)
+    elif beta > math.pi / 2:
+        dieta_x = - h * math.cos(gamma)
+
+    dieta_y = - (h * math.sin(gamma)) if (beta != math.pi / 2) else 0
+
+    x0 = (x1 + x2) / 2 + up_down * dieta_x
+    y0 = (y1 + y2) / 2 + up_down * dieta_y
+
+    r = ((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5
+
+    array1 = np.array([x1 - x0, y1 - y0])
+    array2 = np.array([x2 - x0, y2 - y0])
+    x_axis = np.array([1, 0])
+
+    alpha1 = math.acos(np.dot(array1, x_axis) / (mod_fun(array1) * mod_fun(x_axis)))
+    alpha2 = math.acos(np.dot(array2, x_axis) / (mod_fun(array2) * mod_fun(x_axis)))
+
+    alpha1 = alpha1 if array1[1] >= 0 else 2 * math.pi - alpha1
+    alpha2 = alpha2 if array2[1] >= 0 else 2 * math.pi - alpha2
+
+    alpha1, alpha2 = min([alpha1, alpha2]), max([alpha1, alpha2])
+
+    # circle
+    cis = True if up_down == 1 else False
+    if alpha2 - alpha1 < math.pi:
+        cis = True
+
+    elif alpha2 - alpha1 > math.pi:
+        cis = False
+
+    elif beta == math.pi / 2:
+        pass
+
+    elif alpha1 > math.pi / 2:
+        cis = not cis
+
+    if cis:
+        alpha_range1 = np.arange(alpha1, alpha2, math.pi / epsilon)
+    else:
+        alpha_range1_1 = np.arange(alpha2, 2 * math.pi, math.pi / epsilon)
+        alpha_range1_2 = np.arange(math.pi / epsilon, alpha1, math.pi / epsilon)
+        alpha_range1 = np.concatenate([alpha_range1_1, alpha_range1_2])
+
+    x_list = [r * math.cos(angle) + x0 for angle in alpha_range1]
+    y_list = [r * math.sin(angle) + y0 for angle in alpha_range1]
+
+    ax.plot(x_list, y_list, **kwargs)
+
+
+def box_plot_decent(ax, data_, positions,
+                    widths=0.4, whis=99,
+                    box_edge_color='gray', box_edge_alpha=0.7,
+                    box_face_color=(1, 0, 0, 0), lw=2,
+                    scatter=True, scatter_color='gray',
+                    random_props=3, s=10, alpha=1, edgecolors='none'):
+    """
+
+    :param ax:
+    :param data_:
+    :param positions:
+    :param widths:
+    :param whis:
+    :param box_edge_color:
+    :param box_edge_alpha:
+    :param box_face_color:
+    :param lw:
+    :param scatter:
+    :param scatter_color:
+    :param random_props:
+    :param s:
+    :param alpha:
+    :param edgecolors:
+    :return:
+    """
+    ax.boxplot(data_,
+               positions=positions, widths=widths, whis=whis, patch_artist=True, showfliers=False,
+               boxprops={'color': box_edge_color, 'facecolor': box_face_color, 'linewidth': lw},
+               whiskerprops={'color': box_edge_color, 'alpha': box_edge_alpha, 'linewidth': lw},
+               capprops={'color': box_edge_color, 'alpha': box_edge_alpha, 'linewidth': lw},
+               medianprops={'linestyle': '--', 'color': box_edge_color, 'alpha': box_edge_alpha, 'linewidth': lw})
+
+    if scatter:
+        if random_props is None:
+            x_list = positions * len(data_)
+        else:
+            x_list = positions * len(data_) + (np.random.random(len(data_)) - 0.5) / random_props
+
+        ax.scatter(x_list, data_, c=scatter_color, s=s, alpha=alpha, edgecolors=edgecolors)
+
+
+def framework_plot(x0_, x1_, y0, y1):
+    plt.plot([x0_, x0_], [y0, y1], c='black')
+    plt.plot([x1_, x1_], [y0, y1], c='black')
+    plt.plot([x0_, x1_], [y0, y0], c='black')
+    plt.plot([x0_, x1_], [y1, y1], c='black')

@@ -11,19 +11,64 @@ from collections import defaultdict, namedtuple
 from functools import reduce
 
 
+class LinearMapping(object):
+    def __init__(self, x1, x2, y1, y2):
+        """
+        Mapping range to range: (x1, x1) <-> (y1, y2)
+        :param x1: range1 start
+        :param x2: range1 end
+        :param y1: range2 start
+        :param y2: range2 end
+        """
+        x_d = x2 - x1
+        y_d = y2 - y1
+
+        if not x_d:
+            print('Warning: x_d = 0')
+            self.ok = False
+        elif not y_d:
+            print('Warning: y_d = 0')
+            self.ok = False
+        else:
+            self.ok = True
+
+        self.x1 = x1
+        self.y1 = y1
+        self.k = y_d / x_d
+
+    def map_x2y(self, x_new):
+        if self.ok:
+            return (x_new - self.x1) * self.k + self.y1
+        else:
+            return None
+
+    def map_y2x(self, y_new):
+        if self.ok:
+            return (y_new - self.y1) / self.k + self.x1
+        else:
+            return None
+
+
 # 全排列函数
 fn = lambda x, code='': reduce(lambda y, z: [str(i) + code + str(j) for i in y for j in z], x)
 
 
 def count_list(list_like_, sort=False, ascending=True, dict_out=False):
     """
-    Perform a fast and decnet calculation of the element frequency number.
+    Perform a fast and decent calculation of the element frequency number.
     :param list_like_: iterable object (Any)
     :param sort: sort the result or not
     :param ascending: sort by ascending or not
     :param dict_out: output as dictionary or a pandas.DataFrame form.
-    :return: decnet summary of the given list.
+    :return: summary of the given list.
     """
+    if not len(list_like_):
+        print('Warning: nothing in input.')
+        if dict_out:
+            return defaultdict(int)
+        else:
+            return pd.DataFrame(None, columns=[0, 1])
+
     if dict_out:
         countlist = defaultdict(int)
         for i in list_like_:
@@ -80,7 +125,8 @@ def normalize_df(data_, axis=0):
         data__ = (data__ - np.mean(data__, axis=axis)) / np.std(data__, axis=axis)
 
     elif axis == 'all':
-        data__ = (data__ - np.mean(np.mean(data__)) / np.std(np.std(data__)))
+        data__ = (data__ - np.mean(np.mean(data__))) / \
+                 np.std(np.array(data__.values).reshape(data__.shape[0] * data__.shape[1], 1))
 
     else:
         raise ValueError('parameter \'axis\' should be set among 0, 1 and \'all\'.')
@@ -102,8 +148,14 @@ def double_norm(data_, axis='all'):
     if type(axis) == int:
         max_value_ = np.max(data__, axis=axis)
         min_value_ = -np.min(data__, axis=axis)
-        data__[data__ >= 0] = data__[data__ >= 0] / max_value_ / 2 + 0.5
-        data__[data__ < 0] = data__[data__ < 0] / min_value_ / 2 + 0.5
+        if axis == 0:
+            data__[data__ >= 0] = data__[data__ >= 0] / max_value_ / 2 + 0.5
+            data__[data__ < 0] = data__[data__ < 0] / min_value_ / 2 + 0.5
+        else:
+            data__ = data__.T
+            data__[data__ >= 0] = data__[data__ >= 0] / max_value_ / 2 + 0.5
+            data__[data__ < 0] = data__[data__ < 0] / min_value_ / 2 + 0.5
+            data__ = data__.T
 
     elif axis == 'all':
         max_value_ = np.max(np.max(data__))
@@ -124,15 +176,15 @@ def normal_test(p_data_):
     :param p_data_: data to be tested
     :return: p-value
     """
+    from scipy import stats
+
     stat_ = []
     for i in range(p_data_.shape[1]):
         data_ = p_data_.loc[p_data_.iloc[:, i] != -1].iloc[:, i]
         data_ = data_.astype(float)
         stat_ += [stats.shapiro(data_)[1]]
-    if np.max(stat_) > 0.1:
-        norm_ = False
-    else:
-        norm_ = True
+
+    norm_ = False if np.max(stat_) > 0.1 else True
 
     return norm_
 
@@ -145,20 +197,29 @@ def mark_pval(p_v_):
     :return: 'Ns', '.', or '*' * n
     """
     if p_v_ < 0.0001:
-        return '*' * 4
+        return '****'
     elif p_v_ < 0.001:
-        return '*' * 3
+        return '***'
     elif p_v_ < 0.01:
-        return '*' * 2
+        return '**'
     elif p_v_ < 0.05:
-        return '*' * 1
+        return '*'
     elif p_v_ < 0.1:
-        return '·' * 1
+        return '·'
     else:
-        return 'Ns' * 1
+        return 'Ns'
 
 
 def effect_size_hedges_g(test_data_, test_data2_, summary=True, rounding=False, rounding_int=False):
+    """
+    Served for the effect size
+    :param test_data_:
+    :param test_data2_:
+    :param summary:
+    :param rounding:
+    :param rounding_int:
+    :return:
+    """
     n1_ = len(test_data_)
     n2_ = len(test_data2_)
     m1_ = np.mean(test_data_)
@@ -168,7 +229,7 @@ def effect_size_hedges_g(test_data_, test_data2_, summary=True, rounding=False, 
     sd1_ = np.std(test_data_)
     sd2_ = np.std(test_data2_)
 
-    sd_star_ = ((sd1_**2 * (n1_ - 1) + sd2_**2 * (n2_ - 1)) / (n1_ + n2_ - 2)) ** 0.5
+    sd_star_ = ((sd1_ ** 2 * (n1_ - 1) + sd2_ ** 2 * (n2_ - 1)) / (n1_ + n2_ - 2)) ** 0.5
     g_size_ = (m1_ - m2_) / sd_star_
 
     if summary:
@@ -191,10 +252,10 @@ def simple_test(test_data, test_data2=False, is_pair=False, summary=False, one_t
     :param is_pair: If paired-test will be performed.
     :param summary: output detailed test infomation or only P-value
     :param one_tail: do one-tail or two-tail test
-    :param norm_fix: If the test fixs normal distribution or not.
-    Default is None, than will perform normal distribution test to determin it.
+    :param norm_fix: If the test fixes normal distribution or not.
+    Default is None, then will perform normal distribution test to determine it.
     If True, normal distribution is directly determined, vice versa.
-    :param equal_var: If the test fixs equal_var or not, only used when t test is performed.
+    :param equal_var: If the test fixes equal_var or not, only used when t test is performed.
     :param rounding: numpy.round(obj, rounding) will be performed for P-value
     :return: Test result.
     """
@@ -211,23 +272,16 @@ def simple_test(test_data, test_data2=False, is_pair=False, summary=False, one_t
         return
 
     if one_tail:
-        if np.mean(test_data) > np.mean(test_data2):
-            larger = 1
-        else:
-            larger = 0
+        larger = 1 if np.mean(test_data) > np.mean(test_data2) else 0
 
-    if not rounding and type(rounding) == int:
-        rounding_int = 1
-    else:
-        rounding_int = rounding
+    rounding_int = 1 if (not rounding and type(rounding) == int) else rounding
 
     if norm_fix is None:
         norm1 = stats.shapiro(test_data)[1]
         norm2 = stats.shapiro(test_data2)[1]
-        if min([norm1, norm2]) <= 0.05:
-            norm = False
-        else:
-            norm = True
+
+        norm = False if min([norm1, norm2]) <= 0.05 else True
+
     elif norm_fix:
         norm1 = 1
         norm2 = 1
@@ -303,10 +357,7 @@ def simple_test(test_data, test_data2=False, is_pair=False, summary=False, one_t
         if stat >= 0.1:
             larger_res = ' = '
         elif one_tail:
-            if larger:
-                larger_res = ' > '
-            else:
-                larger_res = ' < '
+            larger_res = ' > ' if larger else ' < '
         else:
             larger_res = ' != '
 
@@ -317,13 +368,13 @@ def simple_test(test_data, test_data2=False, is_pair=False, summary=False, one_t
                                               'm2', 'me1', 'me2', 'sd1', 'sd2', 'sd_star'])
 
         if rounding_int:
-            summary_info =  [np.round(stat, rounding), larger_res, symbol,
-                             {'normal': str(norm), 'data1_p': np.round(norm1, rounding),
-                              'data2_p': np.round(norm2, rounding)},
-                             str(is_pair), str(is_equal_var), name] + effect_size_info
+            summary_info = [np.round(stat, rounding), larger_res, symbol,
+                            {'normal': str(norm), 'data1_p': np.round(norm1, rounding),
+                             'data2_p': np.round(norm2, rounding)},
+                            str(is_pair), str(is_equal_var), name] + effect_size_info
         else:
-            summary_info =  [stat, larger_res, symbol, {'normal': str(norm), 'data1_p': norm1, 'data2_p': norm2},
-                             str(is_pair), str(is_equal_var), name] + effect_size_info
+            summary_info = [stat, larger_res, symbol, {'normal': str(norm), 'data1_p': norm1, 'data2_p': norm2},
+                            str(is_pair), str(is_equal_var), name] + effect_size_info
 
         return summary._make(summary_info)
 
@@ -346,10 +397,7 @@ def permutation_test(sample1_, sample2_, iter_num=10000, summary=False, one_tail
     n1 = len(sample1_)
     n2 = len(sample2_)
 
-    if not rounding and type(rounding) == int:
-        rounding_int = 1
-    else:
-        rounding_int = rounding
+    rounding_int = 1 if (not rounding and type(rounding) == int) else rounding
 
     if math.comb(n1 + n2, n1) < iter_num:
         return 'so easy!'
@@ -387,15 +435,11 @@ def permutation_test(sample1_, sample2_, iter_num=10000, summary=False, one_tail
         if p_ >= 0.1:
             larger_res = ' = '
         elif one_tail:
-            if larger:
-                larger_res = ' > '
-            else:
-                larger_res = ' < '
+            larger_res = ' > ' if larger else ' < '
         else:
             larger_res = ' != '
 
     symbol = mark_pval(p_)
-
     summary = namedtuple('test_summary', ['p_value', 'relationship', 'symbol', 'name'])
 
     if rounding_int:
@@ -448,7 +492,7 @@ def time_trans(seconds_, second_round_num=2):
     """
     Trans time in a decent form.
     :param seconds_: int or float object indicates pure seconds
-    :param second_round_num: out second will do np.round
+    :param second_round_num: out second will do np.round()
     :return: time in hour (if necessary), minute (if necessary) and seconds
     """
     if seconds_ == 0:
@@ -483,8 +527,8 @@ def list_selection(list_like_, target='', exception=False, sep=False, logic_and=
     :param target: element with such string will be selected (cooperated with param 'sep' and 'logic_and')
     :param exception: element with such string will not be selected (cooperated with param 'sep' and 'logic_and')
     :param sep: param 'target' and 'exception' will be split by sep
-    :param logic_and: splited param 'target' and 'exception' will be used in the logic 'and', 'or'
-    :return: list after selcted
+    :param logic_and: split param 'target' and 'exception' will be used in the logic 'and', 'or'
+    :return: list after selected
     """
 
     if sep:
@@ -540,6 +584,12 @@ def get_md5(file_path_, hash_type='md5', ram=4000000):
 
 
 def get_order_ind(list_like_, ascending=True):
+    """
+    get sort_index
+    :param list_like_:
+    :param ascending:
+    :return:
+    """
     list_like_ind_ = list(range(len(list_like_)))
     process_obj = pd.DataFrame([list_like_ind_, list_like_]).T
     process_obj = process_obj.sort_values(by=1, ascending=ascending)
@@ -553,8 +603,209 @@ def get_order_ind(list_like_, ascending=True):
 
 
 def get_first_x_ind(list_like_, order=0, ascending=True):
+    """
+
+    :param list_like_:
+    :param order:
+    :param ascending:
+    :return:
+    """
     order_dict_ = get_order_ind(list_like_, ascending=ascending)
     try:
         return [order_dict_[i_] for i_ in order]
     except TypeError:
         return order_dict_[order]
+
+
+def remove_list(list_, value_):
+    """
+
+    :param list_:
+    :param value_:
+    :return:
+    """
+    while value_ in list_:
+        list_.remove(value_)
+
+    return list_
+
+
+def remove_duplicate_list(list_):
+    """
+    Remove duplicates from input list_like and keep each identity's first order
+    :param list_: list_like
+    :return: list
+    """
+    _dict = {}
+    try:
+        for _i in list_:
+            _dict[_i] = ''
+
+        return list(_dict.keys())
+
+    except TypeError:
+        str_list = [str(i) for i in list_]
+        for _i in str_list:
+            _dict[_i] = ''
+
+        res_ = []
+        for info_ in _dict.keys():
+            string = 'a_ = ' + info_
+            exec(string, None, globals())
+            res_ += [a_]
+
+        return res_
+
+
+def trans_number(num_):
+    """
+    change 10000000 to 10,000,000
+    :param num_: int number
+    :return:
+    """
+    string_num = str(num_)
+    if len(string_num) <= 3:
+        return string_num
+
+    string_num_out = ''
+    for i_ in range(0, len(string_num) - 3, 3):
+        if i_ == 0:
+            string_num_out = ',' + string_num[-3:] + string_num_out
+        else:
+            string_num_out = ',' + string_num[-(i_ + 3): -i_] + string_num_out
+
+    string_num_out = string_num[:-(i_ + 3)] + string_num_out
+
+    return string_num_out
+
+
+def assign_tasks(weight_list, weight_label=None, max_volume=100, summary=False):
+    """
+
+    :param weight_list:
+    :param weight_label:
+    :param max_volume:
+    :param summary:
+    :return:
+    """
+    if weight_label is None:
+        weight_label = list(range(len(weight_list)))
+
+    perform_df = pd.DataFrame([weight_list, weight_label]).T.sort_values(0, ascending=False)
+    if perform_df.iloc[0, 0] > max_volume:
+        raise ValueError('the single obj is higher than \'max_volume\'')
+
+    min_bucket = sum(weight_list) // max_volume
+
+    assign_df = pd.DataFrame([max_volume] * min_bucket)
+    assign_dict = {}
+    now_bucket = min_bucket - 1
+
+    for weight, label in perform_df.values:
+        max_space = np.max(assign_df.iloc[:, 0])
+        if max_space >= weight:
+            use_bucket = np.argmax(assign_df.iloc[:, 0] >= weight)
+            assign_dict[label] = use_bucket
+            assign_df.iloc[use_bucket, 0] -= weight
+        else:
+            now_bucket += 1
+            assign_dict[label] = now_bucket
+            assign_df = pd.concat([assign_df, pd.DataFrame([max_volume - weight], index=[now_bucket])])
+
+    if summary:
+        return assign_dict, assign_df
+    else:
+        return assign_dict
+
+
+def has_chinese(string):
+    """
+    Check is chinese existed in given string
+    :param string:
+    :return:
+    """
+    if re.search('[\\u4e00-\\u9fff]', string):
+        return True
+    return False
+
+
+def screen_search(search_paths, confidence=0.8, break_threshold=60, search_interval=1):
+    """
+    Search given picture(s) in iteration.
+    :param search_paths: string or list object
+    :param confidence:
+    :param break_threshold: times
+    :param search_interval: seconds
+    :return:
+    """
+    import pyautogui
+
+    if type(search_paths) is str:
+        search_paths = [search_paths]
+
+    length = len(search_paths)
+    break_time = 0
+    while True:
+        break_time += 1
+        for i_, search_path in enumerate(search_paths):
+            try:
+                location_ = pyautogui.locateOnScreen(search_path, confidence=confidence)
+            except pyautogui.ImageNotFoundException:
+                pass
+            else:
+                if location_ is not None:
+                    return location_, i_
+
+            time.sleep(search_interval / length)
+
+        if break_time > break_threshold:
+            raise TimeoutError('Out of time limit!')
+
+
+# A function to determine the row and column position of a certain element in a two-dimensional array or df
+def find_2d_pos(target_2d, target_element, get_order=None, default_return=None):
+    """
+
+    :param target_2d:
+    :param target_element:
+    :param get_order:
+    :param default_return:
+    :return:
+    """
+    bool_array = target_2d == target_element
+    counts = np.sum(bool_array)
+    if not counts:
+        return default_return
+
+    shape = target_2d.shape
+    row_number = np.array(list(range(shape[0])) * shape[1]).reshape([shape[1], shape[0]]).T
+    col_number = np.array(list(range(shape[1])) * shape[0]).reshape(shape) / 10 ** len(str(shape[1]))
+
+    pos_array = row_number + col_number
+
+    target_pos = pos_array[bool_array]
+
+    if get_order is not None:
+        return [int(i_) for i_ in str(target_pos[get_order]).split('.')]
+    else:
+        return [[int(i_) for i_ in str(j_).split('.')] for j_ in target_pos]
+
+
+# split y axis in two range
+def split_2_ranges(value_, max_value, threshold1=0.5, threshold2=1, thres_value=0.05):
+    if value_ < 0:
+        value_ = -value_
+        fu = True
+    else:
+        fu = False
+
+    if value_ <= thres_value:
+        value_new = (value_ / thres_value) * threshold1
+    else:
+        ratio = (value_ - thres_value) / (max_value - thres_value)
+        value_new = (threshold2 - threshold1) * ratio + threshold1
+
+    if fu:
+        value_new = - value_new
+
+    return value_new
